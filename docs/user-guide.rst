@@ -361,21 +361,45 @@ Update a range
    worksheet.update([[1, 2], [3, 4]], 'A1:B2')
 
 
-Using a Custom JSON Serializer
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Serializing Values the Standard ``json`` Module Cannot Encode
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-By default gspread serializes request bodies with the standard library
-``json`` module, which cannot encode some types such as ``datetime`` or
-``Decimal``. You can register a custom serializer to handle them.
+gspread encodes request bodies with the standard library ``json`` module,
+which cannot encode some types such as ``datetime`` or ``Decimal``. The
+data-writing methods (``update``, ``batch_update``, ``append_row`` and
+``append_rows``) accept a ``default_serializer`` argument for these cases. It
+works exactly like the ``default`` argument of :func:`json.dumps`: it receives
+a value the encoder cannot handle and returns a JSON-serializable substitute.
 
 .. code:: python
 
-   import json
+   import datetime
 
-   gc.set_serializer(lambda body: json.dumps(body, default=str))
+   worksheet.update(
+       [[datetime.date(2026, 6, 23)]],
+       "A1",
+       default_serializer=str,
+   )
 
-The serializer is any callable with the same signature as ``json.dumps``.
-Pass ``None`` to restore the default behavior.
+``str`` covers common types like ``datetime``, ``date``, ``Decimal`` and
+``UUID``. For finer control, pass your own callable:
+
+.. code:: python
+
+   def encode(value):
+       if isinstance(value, datetime.datetime):
+           return value.isoformat()
+       raise TypeError(f"cannot serialize {type(value)}")
+
+   worksheet.update([[some_value]], "A1", default_serializer=encode)
+
+.. note::
+
+   The substitute you return determines how the value lands in the cell. For
+   example ``default_serializer=str`` sends a ``Decimal`` as the JSON string
+   ``"19.99"`` (stored as text unless ``value_input_option`` parses it),
+   whereas returning ``float(value)`` sends a number. Choose the form that
+   matches how you want the cell interpreted.
 
 
 Adding Data Validation

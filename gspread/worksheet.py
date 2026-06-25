@@ -31,7 +31,7 @@ from typing import (
 
 from .cell import Cell
 from .exceptions import GSpreadException
-from .http_client import HTTPClient, ParamsType
+from .http_client import DefaultSerializerType, HTTPClient, ParamsType
 from .urls import WORKSHEET_DRIVE_URL
 from .utils import (
     DateTimeOption,
@@ -1115,6 +1115,7 @@ class Worksheet:
         include_values_in_response: Optional[bool] = None,
         response_value_render_option: Optional[ValueRenderOption] = None,
         response_date_time_render_option: Optional[DateTimeOption] = None,
+        default_serializer: DefaultSerializerType = None,
     ) -> JSONResponse:
         """Sets values in a cell range of the sheet.
 
@@ -1195,6 +1196,13 @@ class Worksheet:
             The default ``date_time_render_option`` is ``DateTimeOption.serial_number``.
         :type date_time_render_option: :class:`~gspread.utils.DateTimeOption`
 
+        :param default_serializer: (optional) A callable applied to values that
+            the standard ``json`` encoder cannot serialize on its own (e.g.
+            ``datetime`` or ``Decimal``). It receives the offending value and
+            must return a JSON-serializable substitute, mirroring the ``default``
+            argument of :func:`json.dumps`. For example, ``default_serializer=str``.
+        :type default_serializer: Callable[[Any], Any]
+
         Examples::
 
             # Sets 'Hello world' in 'A2' cell
@@ -1248,6 +1256,7 @@ class Worksheet:
             full_range_name,
             params=params,
             body={"values": values, "majorDimension": major_dimension},
+            default_serializer=default_serializer,
         )
 
         return response
@@ -1260,6 +1269,7 @@ class Worksheet:
         include_values_in_response: Optional[bool] = None,
         response_value_render_option: Optional[ValueRenderOption] = None,
         response_date_time_render_option: Optional[DateTimeOption] = None,
+        default_serializer: DefaultSerializerType = None,
     ) -> JSONResponse:
         """Sets values in one or more cell ranges of the sheet at once.
 
@@ -1333,6 +1343,13 @@ class Worksheet:
             The default ``date_time_render_option`` is ``DateTimeOption.serial_number``.
         :type date_time_render_option: :class:`~gspread.utils.DateTimeOption`
 
+        :param default_serializer: (optional) A callable applied to values that
+            the standard ``json`` encoder cannot serialize on its own (e.g.
+            ``datetime`` or ``Decimal``). It receives the offending value and
+            must return a JSON-serializable substitute, mirroring the ``default``
+            argument of :func:`json.dumps`. For example, ``default_serializer=str``.
+        :type default_serializer: Callable[[Any], Any]
+
         Examples::
 
             worksheet.batch_update([{
@@ -1365,7 +1382,9 @@ class Worksheet:
             "data": data,
         }
 
-        response = self.client.values_batch_update(self.spreadsheet_id, body=body)
+        response = self.client.values_batch_update(
+            self.spreadsheet_id, body=body, default_serializer=default_serializer
+        )
 
         return response
 
@@ -1785,6 +1804,7 @@ class Worksheet:
         insert_data_option: Optional[InsertDataOption] = None,
         table_range: Optional[str] = None,
         include_values_in_response: bool = False,
+        default_serializer: DefaultSerializerType = None,
     ) -> JSONResponse:
         """Adds a row to the worksheet and populates it with values.
 
@@ -1804,6 +1824,12 @@ class Worksheet:
         :param bool include_values_in_response: (optional) Determines if the
             update response should include the values of the cells that were
             appended. By default, responses do not include the updated values.
+        :param default_serializer: (optional) A callable applied to values that
+            the standard ``json`` encoder cannot serialize on its own (e.g.
+            ``datetime`` or ``Decimal``). It receives the offending value and
+            must return a JSON-serializable substitute, mirroring the ``default``
+            argument of :func:`json.dumps`. For example, ``default_serializer=str``.
+        :type default_serializer: Callable[[Any], Any]
 
         .. _ValueInputOption: https://developers.google.com/sheets/api/reference/rest/v4/ValueInputOption
         .. _InsertDataOption: https://developers.google.com/sheets/api/reference/rest/v4/spreadsheets.values/append#InsertDataOption
@@ -1815,6 +1841,7 @@ class Worksheet:
             insert_data_option=insert_data_option,
             table_range=table_range,
             include_values_in_response=include_values_in_response,
+            default_serializer=default_serializer,
         )
 
     def append_rows(
@@ -1824,6 +1851,7 @@ class Worksheet:
         insert_data_option: Optional[InsertDataOption] = None,
         table_range: Optional[str] = None,
         include_values_in_response: Optional[bool] = None,
+        default_serializer: DefaultSerializerType = None,
     ) -> JSONResponse:
         """Adds multiple rows to the worksheet and populates them with values.
 
@@ -1845,6 +1873,12 @@ class Worksheet:
         :param bool include_values_in_response: (optional) Determines if the
             update response should include the values of the cells that were
             appended. By default, responses do not include the updated values.
+        :param default_serializer: (optional) A callable applied to values that
+            the standard ``json`` encoder cannot serialize on its own (e.g.
+            ``datetime`` or ``Decimal``). It receives the offending value and
+            must return a JSON-serializable substitute, mirroring the ``default``
+            argument of :func:`json.dumps`. For example, ``default_serializer=str``.
+        :type default_serializer: Callable[[Any], Any]
 
         .. _ValueInputOption: https://developers.google.com/sheets/api/reference/rest/v4/ValueInputOption
         .. _InsertDataOption: https://developers.google.com/sheets/api/reference/rest/v4/spreadsheets.values/append#InsertDataOption
@@ -1859,7 +1893,9 @@ class Worksheet:
 
         body = {"values": values}
 
-        res = self.client.values_append(self.spreadsheet_id, range_label, params, body)
+        res = self.client.values_append(
+            self.spreadsheet_id, range_label, params, body, default_serializer
+        )
         num_new_rows = len(values)
         self._properties["gridProperties"]["rowCount"] += num_new_rows
         return res

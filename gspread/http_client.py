@@ -9,6 +9,7 @@ Google API.
 
 import time
 from http import HTTPStatus
+from json import dumps as json_dumps
 from typing import (
     IO,
     Any,
@@ -45,7 +46,7 @@ from .urls import (
 from .utils import ExportFormat, convert_credentials, quote
 
 ParamsType = MutableMapping[str, Optional[Union[str, int, bool, float, List[str]]]]
-SerializerType = Optional[Callable[[Mapping[str, Any]], Union[str, bytes]]]
+DefaultSerializerType = Optional[Callable[[Any], Any]]
 
 FileType = Optional[
     Union[
@@ -85,7 +86,6 @@ class HTTPClient:
             self.session = AuthorizedSession(self.auth)
 
         self.timeout: Optional[Union[float, Tuple[float, float]]] = None
-        self.serializer: SerializerType = None
 
     def login(self) -> None:
         from google.auth.transport.requests import Request
@@ -105,31 +105,6 @@ class HTTPClient:
         """
         self.timeout = timeout
 
-    def set_serializer(self, serializer: SerializerType) -> None:
-        """Set a custom JSON serializer used to encode request bodies.
-
-        The serializer is a callable that takes the request body (a mapping)
-        and returns its JSON-encoded form as ``str`` or ``bytes``. It is
-        applied to every request that sends a JSON body, which is useful for
-        handling types the standard library ``json`` module cannot serialize
-        by default (e.g. ``datetime`` or ``Decimal``).
-
-        Use value ``None`` to restore the default serialization behavior.
-
-        :param serializer: A callable with the same signature as
-            ``json.dumps`` (e.g. ``functools.partial(json.dumps, default=...)``),
-            or ``None`` to use the default.
-
-        Example::
-
-            import json
-
-            client.set_serializer(
-                lambda body: json.dumps(body, default=str)
-            )
-        """
-        self.serializer = serializer
-
     def request(
         self,
         method: str,
@@ -139,9 +114,10 @@ class HTTPClient:
         json: Optional[Mapping[str, Any]] = None,
         files: FileType = None,
         headers: Optional[MutableMapping[str, str]] = None,
+        default_serializer: DefaultSerializerType = None,
     ) -> Response:
-        if self.serializer is not None and json is not None:
-            data = self.serializer(dict(json))
+        if default_serializer is not None and json is not None:
+            data = json_dumps(dict(json), default=default_serializer)
             json = None
             headers = {**(headers or {}), "Content-Type": "application/json"}
         response = self.session.request(
@@ -179,6 +155,7 @@ class HTTPClient:
         range: str,
         params: Optional[ParamsType] = None,
         body: Optional[Mapping[str, Any]] = None,
+        default_serializer: DefaultSerializerType = None,
     ) -> Any:
         """Lower-level method that directly calls `PUT spreadsheets/<ID>/values/<range> <https://developers.google.com/sheets/api/reference/rest/v4/spreadsheets.values/update>`_.
 
@@ -203,11 +180,18 @@ class HTTPClient:
         .. versionadded:: 3.0
         """
         url = SPREADSHEET_VALUES_URL % (id, quote(range))
-        r = self.request("put", url, params=params, json=body)
+        r = self.request(
+            "put", url, params=params, json=body, default_serializer=default_serializer
+        )
         return r.json()
 
     def values_append(
-        self, id: str, range: str, params: ParamsType, body: Optional[Mapping[str, Any]]
+        self,
+        id: str,
+        range: str,
+        params: ParamsType,
+        body: Optional[Mapping[str, Any]],
+        default_serializer: DefaultSerializerType = None,
     ) -> Any:
         """Lower-level method that directly calls `spreadsheets/<ID>/values:append <https://developers.google.com/sheets/api/reference/rest/v4/spreadsheets.values/append>`_.
 
@@ -221,7 +205,9 @@ class HTTPClient:
         .. versionadded:: 3.0
         """
         url = SPREADSHEET_VALUES_APPEND_URL % (id, quote(range))
-        r = self.request("post", url, params=params, json=body)
+        r = self.request(
+            "post", url, params=params, json=body, default_serializer=default_serializer
+        )
         return r.json()
 
     def values_clear(self, id: str, range: str) -> Any:
@@ -289,7 +275,10 @@ class HTTPClient:
         return r.json()
 
     def values_batch_update(
-        self, id: str, body: Optional[Mapping[str, Any]] = None
+        self,
+        id: str,
+        body: Optional[Mapping[str, Any]] = None,
+        default_serializer: DefaultSerializerType = None,
     ) -> Any:
         """Lower-level method that directly calls `spreadsheets/<ID>/values:batchUpdate <https://developers.google.com/sheets/api/reference/rest/v4/spreadsheets.values/batchUpdate>`_.
 
@@ -298,7 +287,7 @@ class HTTPClient:
         :rtype: dict
         """
         url = SPREADSHEET_VALUES_BATCH_UPDATE_URL % id
-        r = self.request("post", url, json=body)
+        r = self.request("post", url, json=body, default_serializer=default_serializer)
         return r.json()
 
     def spreadsheets_get(self, id: str, params: Optional[ParamsType] = None) -> Any:
