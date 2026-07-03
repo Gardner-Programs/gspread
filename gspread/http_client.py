@@ -9,9 +9,11 @@ Google API.
 
 import time
 from http import HTTPStatus
+from json import dumps as json_dumps
 from typing import (
     IO,
     Any,
+    Callable,
     Dict,
     List,
     Mapping,
@@ -44,6 +46,7 @@ from .urls import (
 from .utils import ExportFormat, convert_credentials, quote
 
 ParamsType = MutableMapping[str, Optional[Union[str, int, bool, float, List[str]]]]
+DefaultSerializerType = Optional[Callable[[Any], Any]]
 
 FileType = Optional[
     Union[
@@ -107,11 +110,16 @@ class HTTPClient:
         method: str,
         endpoint: str,
         params: Optional[ParamsType] = None,
-        data: Optional[bytes] = None,
+        data: Optional[Union[str, bytes]] = None,
         json: Optional[Mapping[str, Any]] = None,
         files: FileType = None,
         headers: Optional[MutableMapping[str, str]] = None,
+        default_serializer: DefaultSerializerType = None,
     ) -> Response:
+        if default_serializer is not None and json is not None:
+            data = json_dumps(dict(json), default=default_serializer)
+            json = None
+            headers = {**(headers or {}), "Content-Type": "application/json"}
         response = self.session.request(
             method=method,
             url=endpoint,
@@ -147,6 +155,7 @@ class HTTPClient:
         range: str,
         params: Optional[ParamsType] = None,
         body: Optional[Mapping[str, Any]] = None,
+        default_serializer: DefaultSerializerType = None,
     ) -> Any:
         """Lower-level method that directly calls `PUT spreadsheets/<ID>/values/<range> <https://developers.google.com/sheets/api/reference/rest/v4/spreadsheets.values/update>`_.
 
@@ -171,11 +180,18 @@ class HTTPClient:
         .. versionadded:: 3.0
         """
         url = SPREADSHEET_VALUES_URL % (id, quote(range))
-        r = self.request("put", url, params=params, json=body)
+        r = self.request(
+            "put", url, params=params, json=body, default_serializer=default_serializer
+        )
         return r.json()
 
     def values_append(
-        self, id: str, range: str, params: ParamsType, body: Optional[Mapping[str, Any]]
+        self,
+        id: str,
+        range: str,
+        params: ParamsType,
+        body: Optional[Mapping[str, Any]],
+        default_serializer: DefaultSerializerType = None,
     ) -> Any:
         """Lower-level method that directly calls `spreadsheets/<ID>/values:append <https://developers.google.com/sheets/api/reference/rest/v4/spreadsheets.values/append>`_.
 
@@ -189,7 +205,9 @@ class HTTPClient:
         .. versionadded:: 3.0
         """
         url = SPREADSHEET_VALUES_APPEND_URL % (id, quote(range))
-        r = self.request("post", url, params=params, json=body)
+        r = self.request(
+            "post", url, params=params, json=body, default_serializer=default_serializer
+        )
         return r.json()
 
     def values_clear(self, id: str, range: str) -> Any:
@@ -257,7 +275,10 @@ class HTTPClient:
         return r.json()
 
     def values_batch_update(
-        self, id: str, body: Optional[Mapping[str, Any]] = None
+        self,
+        id: str,
+        body: Optional[Mapping[str, Any]] = None,
+        default_serializer: DefaultSerializerType = None,
     ) -> Any:
         """Lower-level method that directly calls `spreadsheets/<ID>/values:batchUpdate <https://developers.google.com/sheets/api/reference/rest/v4/spreadsheets.values/batchUpdate>`_.
 
@@ -266,7 +287,7 @@ class HTTPClient:
         :rtype: dict
         """
         url = SPREADSHEET_VALUES_BATCH_UPDATE_URL % id
-        r = self.request("post", url, json=body)
+        r = self.request("post", url, json=body, default_serializer=default_serializer)
         return r.json()
 
     def spreadsheets_get(self, id: str, params: Optional[ParamsType] = None) -> Any:
